@@ -17,6 +17,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.security.oauth2.core.oidc.OidcUserInfo;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.server.authorization.JdbcOAuth2AuthorizationConsentService;
 import org.springframework.security.oauth2.server.authorization.JdbcOAuth2AuthorizationService;
@@ -25,10 +26,16 @@ import org.springframework.security.oauth2.server.authorization.OAuth2Authorizat
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.config.annotation.web.configuration.OAuth2AuthorizationServerConfiguration;
 import org.springframework.security.oauth2.server.authorization.config.annotation.web.configurers.OAuth2AuthorizationServerConfigurer;
+import org.springframework.security.oauth2.server.authorization.oidc.authentication.OidcUserInfoAuthenticationContext;
+import org.springframework.security.oauth2.server.authorization.oidc.authentication.OidcUserInfoAuthenticationToken;
 import org.springframework.security.oauth2.server.authorization.settings.AuthorizationServerSettings;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
 import org.springframework.security.web.util.matcher.MediaTypeRequestMatcher;
+import org.springframework.security.web.util.matcher.RequestMatcher;
+
+import java.util.function.Function;
 
 /**
  * @author Joe Grandja
@@ -51,22 +58,22 @@ public class AuthorizationServerConfig {
          * Customize the User Info response
          * https://docs.spring.io/spring-authorization-server/docs/current/reference/html/guides/how-to-userinfo.html#customize-user-info
          */
-//        Function<OidcUserInfoAuthenticationContext, OidcUserInfo> userInfoMapper = (context) -> {
-//            OidcUserInfoAuthenticationToken authentication = context.getAuthentication();
-//            JwtAuthenticationToken principal = (JwtAuthenticationToken) authentication.getPrincipal();
-//
-//            return new OidcUserInfo(principal.getToken().getClaims());
-//        };
-//
-//        OAuth2AuthorizationServerConfigurer authorizationServerConfigurer = new OAuth2AuthorizationServerConfigurer();
-//        RequestMatcher endpointsMatcher = authorizationServerConfigurer.getEndpointsMatcher();
-//
-//        authorizationServerConfigurer
-//            .oidc((oidc) -> oidc
-//                .userInfoEndpoint((userInfo) -> userInfo
-//                    .userInfoMapper(userInfoMapper)
-//                )
-//            );
+        Function<OidcUserInfoAuthenticationContext, OidcUserInfo> userInfoMapper = (context) -> {
+            OidcUserInfoAuthenticationToken authentication = context.getAuthentication();
+            JwtAuthenticationToken principal = (JwtAuthenticationToken) authentication.getPrincipal();
+
+            return new OidcUserInfo(principal.getToken().getClaims());
+        };
+        //
+        //OAuth2AuthorizationServerConfigurer authorizationServerConfigurer = new OAuth2AuthorizationServerConfigurer();
+        //RequestMatcher endpointsMatcher = authorizationServerConfigurer.getEndpointsMatcher();
+        //
+        //authorizationServerConfigurer
+        //    .oidc((oidc) -> oidc
+        //        .userInfoEndpoint((userInfo) -> userInfo
+        //            .userInfoMapper(userInfoMapper)
+        //        )
+        //    );
         DeviceClientAuthenticationConverter deviceClientAuthenticationConverter =
             new DeviceClientAuthenticationConverter(
                 authorizationServerSettings.getDeviceAuthorizationEndpoint());
@@ -82,7 +89,10 @@ public class AuthorizationServerConfig {
             )
             .authorizationEndpoint(authorizationEndpoint ->
                 authorizationEndpoint.consentPage(CUSTOM_CONSENT_PAGE_URI))
-            .oidc(Customizer.withDefaults());
+            .oidc(oidc ->
+                oidc.userInfoEndpoint(userInfoEndpoint ->
+                    userInfoEndpoint.userInfoMapper(userInfoMapper)
+                ));
 
         http
             .exceptionHandling((exceptions) -> exceptions
@@ -132,7 +142,7 @@ public class AuthorizationServerConfig {
 
     @Bean
     public AuthorizationServerSettings authorizationServerSettings() {
-        return AuthorizationServerSettings.builder().build();
+        return AuthorizationServerSettings.builder().oidcUserInfoEndpoint("/oauth2/userinfo").build();
     }
 
 }
